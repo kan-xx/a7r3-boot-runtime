@@ -1,0 +1,4 @@
+# Exact full-feature candidate guard and explicit runtime recovery.
+if [ -x /usr/bin/a7r-boot-guard-v21.elf ]; then
+    /usr/bin/a7r-boot-guard-v21.elf >/dev/null 2>&1 || :
+fi

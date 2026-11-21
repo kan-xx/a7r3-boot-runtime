@@ -1,0 +1,5 @@
+#include <stdint.h>
+extern long syscall(long,...);extern void*malloc(unsigned),*dlopen(const char*,int),*dlsym(void*,const char*);extern void free(void*);extern int dlclose(void*);
+struct packet{const uint8_t*input;uint32_t size,capacity;const uint8_t*output;uint32_t length;void(*freefn)(void*);};
+__attribute__((visibility("default")))uint8_t commandBF10(struct packet*p){if(!p)return 0x81;p->output=0;p->length=0;p->freefn=0;if(!p->input||p->size!=64||p->capacity<64)return 0x81;for(unsigned i=0;i<8;i++)if(p->input[i]!=(uint8_t)"A7SFQ014"[i])return 0x81;const uint32_t*q=(const void*)p->input;if(q[2]!=1||q[3]!=(unsigned)syscall(20))return 0x81;for(unsigned i=16;i<64;i++)if(p->input[i])return 0x81;
+ void*h=dlopen("/usr/lib/liba7r_startup_full_v14.so",6);if(!h)return 0x82;int(*report)(uint32_t*,unsigned)=dlsym(h,"A7R_Lifecycle_Report");uint32_t*out=malloc(8192);if(!out||!report){if(out)free(out);dlclose(h);return 0x83;}int r=report(out,8192);int c=dlclose(h);if(r||c){free(out);return 0x84;}p->output=(void*)out;p->length=8192;p->freefn=free;return 1;}

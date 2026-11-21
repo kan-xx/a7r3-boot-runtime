@@ -1,0 +1,26 @@
+# Build outputs & host test binaries
+build/
+dist/
+out/
+*.dSYM/
+
+# Strictly forbid proprietary or compiled binary artifacts
+*.so
+*.so.*
+*.elf
+*.ko
+*.o
+*.a
+*.bin
+*.img
+*.cpio
+*.cpio.gz
+vmlinuz*
+initramfs*
+
+# Python & OS caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+.DS_Store
