@@ -6,7 +6,7 @@ DB='f2620309212756f6e59d008796a38931e18ac352bf2f1c74d9bafe5f65d8e23b'
 PHASE={1:'STARTED',2:'ACCEPTED',3:'RESTORE_INTENT',4:'READY',5:'DONE',6:'FAILURE'}
 REASON={0:'none',1:'invalid_or_uncertain_journal',2:'latest_phase_not_ACCEPTED',3:'journal_publish_failed',4:'clock_or_sleep_failed',5:'READY_wait_expired',6:'authenticated_runtime_failure'}
 
-def gx(b):
+def gx(b, *, expected_nonce=NONCE, expected_db=DB):
  r={'bytes_observed':len(b),'sha256':hashlib.sha256(b).hexdigest(),'valid_content':False,'errors':[]}
  if len(b)!=256:r['errors']=['length'];return r
  abi,n,seq,phase,code=struct.unpack_from('<IIQII',b,8);pid=struct.unpack_from('<I',b,120)[0]
@@ -15,8 +15,10 @@ def gx(b):
  e=r['errors']
  if b[:8]!=b'A7GXST01' or abi!=1 or n!=256:e.append('framing')
  if not 0<seq<=(1<<64)-5 or phase not in PHASE:e.append('seq_or_phase')
- if b[32:48].hex()!=NONCE:e.append('nonce')
- if b[88:120].hex()!=DB:e.append('candidate')
+ if expected_nonce is not None and b[32:48].hex()!=expected_nonce.lower():e.append('nonce')
+ elif expected_nonce is None and not any(b[32:48]):e.append('nonce')
+ if expected_db is not None and b[88:120].hex()!=expected_db.lower():e.append('candidate')
+ elif expected_db is None and not any(b[88:120]):e.append('candidate')
  if not r['digest_valid']:e.append('digest')
  if rawboot[36:]!=bytes(4) or not re.fullmatch('[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}',boot):e.append('boot')
  extra=b[124:224];used=8 if phase==4 else 12 if phase==6 else 0
@@ -59,5 +61,18 @@ def summarize(a,b,current_boot=None):
  return {'next_source_branch':'CONFIRMED_same_boot'if current_boot==best['boot']else'publish_STARTED_then_wait_current_READY','highest_seq':best['seq'],'observed_only':True}
 
 def main():
- p=argparse.ArgumentParser(description=__doc__);p.add_argument('file',type=Path);p.add_argument('--kind',choices=['gx','observer'],default='gx');a=p.parse_args();print(json.dumps((gx if a.kind=='gx'else observer)(a.file.read_bytes()),indent=2))
+ p=argparse.ArgumentParser(description=__doc__)
+ p.add_argument('file',type=Path)
+ p.add_argument('--kind',choices=['gx','observer'],default='gx')
+ p.add_argument('--nonce',help='Expected 32-hex installation nonce for gx journal records')
+ p.add_argument('--db-sha256',help='Expected 64-hex candidate libIMDB.so SHA-256 for gx journal records')
+ p.add_argument('--any-identity',action='store_true',help='Accept any non-zero installation nonce and candidate SHA-256')
+ a=p.parse_args()
+ raw=a.file.read_bytes()
+ if a.kind=='observer':
+  print(json.dumps(observer(raw),indent=2))
+ else:
+  exp_nonce=None if a.any_identity else (a.nonce or NONCE)
+  exp_db=None if a.any_identity else (a.db_sha256 or DB)
+  print(json.dumps(gx(raw,expected_nonce=exp_nonce,expected_db=exp_db),indent=2))
 if __name__=='__main__':main()

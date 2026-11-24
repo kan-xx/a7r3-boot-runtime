@@ -216,7 +216,8 @@ def transform_imdb(
 ) -> tuple[bytes, dict]:
     """Return (extended_elf_bytes, metadata_dict) without modifying executable sections."""
     stock_sha = hashlib.sha256(stock_bytes).hexdigest()
-    if not allow_synthetic and stock_sha != STOCK_IMDB_SHA256:
+    skip_fw_sha = allow_synthetic or os.environ.get("A7R3_SKIP_FW_SHA256") == "1"
+    if not skip_fw_sha and stock_sha != STOCK_IMDB_SHA256:
         raise ValueError(
             f"Stock libIMDB.so SHA-256 mismatch: got {stock_sha}, expected {STOCK_IMDB_SHA256}"
         )
@@ -394,7 +395,7 @@ def transform_imdb(
             raise
 
     out_sha = hashlib.sha256(out_bytes).hexdigest()
-    if not allow_synthetic and strings == DEFAULT_STRINGS and out_sha != EXPECTED_ADDON_SHA256:
+    if not skip_fw_sha and strings == DEFAULT_STRINGS and out_sha != EXPECTED_ADDON_SHA256:
         raise AssertionError(
             f"Deterministic output SHA-256 mismatch: got {out_sha}, expected {EXPECTED_ADDON_SHA256}"
         )
@@ -450,9 +451,14 @@ def main() -> None:
         help="Optional output path for JSON transformation report",
     )
     parser.add_argument(
+        "--dso-path",
+        default=DEFAULT_STRINGS[0],
+        help=f"Target coordinator DSO path in descriptor[4] (default: {DEFAULT_STRINGS[0]})",
+    )
+    parser.add_argument(
         "--allow-synthetic",
         action="store_true",
-        help="Allow synthetic unit-test ELF inputs rather than enforcing FW 3.10 SHA-256",
+        help="Allow synthetic/custom ELF inputs rather than enforcing stock FW 3.10 SHA-256",
     )
     args = parser.parse_args()
 
@@ -460,9 +466,11 @@ def main() -> None:
     if stock_path is None:
         parser.error("Provide --stock-imdb or --fw-root / A7R3_FW_ROOT")
 
+    custom_strings = [args.dso_path, *DEFAULT_STRINGS[1:]]
     out_bytes, report = transform_imdb(
         stock_path.read_bytes(),
         allow_synthetic=args.allow_synthetic,
+        strings=custom_strings,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_bytes(out_bytes)

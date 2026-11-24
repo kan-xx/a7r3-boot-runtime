@@ -21,11 +21,11 @@ static const struct dep immutable_dependencies[]={
 #define FIX_RETAINED "liba7r_touch_full_runtime_v7.v15-retained.so"
 #define FIX_OLD_SHA "b5fbfc1603fe54125decf28000cc76e97d058e413b97a5de6d88a28aa2cc0f78"
 #define FIX_NEW_SHA "7cad57295f4960a6e5eef59714684276f9541ff7d906ef7c825cb27c514ddfa8"
-#define FIX_BOOT "00000000-0000-4000-8000-000000000000"
+#define FIX_BOOT ""
 #define FIX_OLD_BYTES 160344u
 #define FIX_NEW_BYTES 160552u
 #define FIX_MODE 365u
-#define FIX_PID 151u
-#define FIX_OLD_INODE 1000u
-#define FIX_START 106ull
+#define FIX_PID 0u
+#define FIX_OLD_INODE 0u
+#define FIX_START 0ull
 #endif

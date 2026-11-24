@@ -4,9 +4,9 @@
 #ifndef CL_CUSTOM_SPECS
 #define CL_COUNT 8u
 #define CL_ALL_MASK ((1u<<CL_COUNT)-1u)
-#define CL_BOOT "00000000-0000-4000-8000-000000000000"
-#define CL_PID 151u
-#define CL_START 106ull
+#define CL_BOOT ""
+#define CL_PID 0u
+#define CL_START 0ull
 struct cl_spec {const char*name;uint32_t bytes,mode;const char*sha;};
 static const struct cl_spec cl_specs[CL_COUNT]={
 {"liba7r_touch_full_runtime_v7.v14-copy.so",158072u,0555u,"d706ce18284a3cfb4449de8aa4b3b62457cd993907a812738ff8da4b52c4d8ee"},
@@ -19,7 +19,7 @@ static const struct cl_spec cl_specs[CL_COUNT]={
 {"a7r_touch_boot_v1.v9-retained.bin",128u,0444u,"b8c81667959f13dea3873ac30a82dfca0f77b472bdde72b1bcb016c2cb804f3e"},
 };
 static const char*const cl_names[CL_COUNT]={"liba7r_touch_full_runtime_v7.v14-copy.so","liba7r_touch_full_runtime_v7.v14-retained.so","a7r_touch_boot_v1.v14-copy.bin","a7r_touch_boot_v1.v14-retained.bin","a7r_touch_boot_v1.v8-copy.bin","a7r_touch_boot_v1.v8-retained.bin","a7r_touch_boot_v1.v9-copy.bin","a7r_touch_boot_v1.v9-retained.bin"};
-static const uint64_t cl_expected_inodes[CL_COUNT]={1001ull,1002ull,1003ull,1004ull,1005ull,1006ull,1007ull,1008ull};
+static const uint64_t cl_expected_inodes[CL_COUNT]={0};
 #endif /* CL_CUSTOM_SPECS */
 struct cl_identity {uint64_t dev,ino,size;uint32_t mode,uid,gid,nlink;int64_t mtime,ctime;uint32_t mtime_ns,ctime_ns;uint8_t sha[32];};
 struct cl_api {

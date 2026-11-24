@@ -10,6 +10,8 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "boot-guard"))
+sys.path.insert(0, str(REPO / "publishers"))
+from configure_release import generate_headers  # noqa: E402
 from journal_decode import (  # noqa: E402
     DB,
     NONCE,
@@ -89,6 +91,34 @@ def main() -> None:
     ri[216:] = hashlib.sha256(ri[:216]).digest()
     ck(restore_intent(bytes(ri))["digest_valid"] is True)
     ck(restore_result(struct.pack("<10I", 0, 1, 1, 1, 1, 1, 1, 1, 1, 0))["readonly"] == 1)
+
+    # Verify custom installation nonce / candidate SHA-256 support in gx() & configure_release.py
+    custom_rec = bytearray(make_gx(2, 2))
+    custom_rec[32:48] = bytes.fromhex("112233445566778899aabbccddeeff00")
+    custom_rec[88:120] = bytes.fromhex("aa" * 32)
+    custom_rec[224:] = hashlib.sha256(custom_rec[:224]).digest()
+    ck(gx(bytes(custom_rec), expected_nonce=None, expected_db=None)["valid_content"] is True)
+    ck(
+        gx(
+            bytes(custom_rec),
+            expected_nonce="112233445566778899aabbccddeeff00",
+            expected_db="aa" * 32,
+        )["valid_content"]
+        is True
+    )
+
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        art = Path(tmp) / "artifacts"
+        out = Path(tmp) / "headers"
+        art.mkdir()
+        (art / "libIMDB.candidate.so").write_bytes(b"\x7fELF\x01\x01\x01" + bytes(128))
+        (art / "liba7r_startup_full_v14.so").write_bytes(b"\x7fELF\x01\x01\x01" + bytes(256))
+        summary = generate_headers(art, out_root=out)
+        ck(len(str(summary["nonce"])) == 32)
+        ck((out / "boot-guard/configuration.h").is_file())
+        ck((out / "startup-owner/core/identity.h").is_file())
+        ck((out / "publishers/two-step-publish/publication_identity.h").is_file())
 
     print(json.dumps({"passed": True, "test": "journal_decode", "checks": checks}))
 

@@ -43,6 +43,7 @@ static unsigned long thread;static void*self_pin,*db_pin;
 static int(*ioctl_fn)(int,unsigned,void*);static int*(*errno_fn)(void);
 static uint32_t(*find_fn)(unsigned,unsigned);
 static uint32_t pid,worker_tid,descriptor,sem_calls;
+static unsigned char runtime_db_hash[32];
 static struct ar_ready_status ready_status,failure_status,report_status;
 static uint32_t ld(const uint32_t*p){return __atomic_load_n(p,__ATOMIC_ACQUIRE);}
 static void st(uint32_t*p,uint32_t v){__atomic_store_n(p,v,__ATOMIC_RELEASE);}
@@ -53,10 +54,22 @@ static uint32_t tid(void*x){(void)x;return syscall(224);}
 static void pause20(void){long t[2]={0,20000000};syscall(162,t,0);}
 void nap_progress(unsigned v){st(&phase,v);}
 static void write_evidence(const char*,const void*,unsigned);
-static int failure(unsigned e){uint32_t zero=0;if(__atomic_compare_exchange_n(&error,&zero,e,0,__ATOMIC_ACQ_REL,__ATOMIC_ACQUIRE)){st(&phase,100);bg_fail(&bootstrap,e);ar_write_failure(READY_DIR,installation,db_hash,OWNER_BUILD,pid,e,&failure_status);}return -1;}
+static int failure(unsigned e){uint32_t zero=0;if(__atomic_compare_exchange_n(&error,&zero,e,0,__ATOMIC_ACQ_REL,__ATOMIC_ACQUIRE)){st(&phase,100);bg_fail(&bootstrap,e);ar_write_failure(READY_DIR,installation,runtime_db_hash,OWNER_BUILD,pid,e,&failure_status);}return -1;}
 static void write_evidence(const char*path,const void*bytes,unsigned size){int f=syscall(5,path,AR_CREATE_EXCLUSIVE,0600);if(f<0)return;syscall(4,f,bytes,size);syscall(118,f);syscall(6,f);}
 static void entry_evidence(unsigned event){uint32_t r[8]={0x32534f41,OWNER_BUILD,(unsigned)syscall(20),tid(0),event,ld(&phase),ld(&error),0};write_evidence(ENTRY_RECORD,r,sizeof r);}
-static int hash_file(const char*path,unsigned bytes,const unsigned char*expected){int f=syscall(5,path,0x80000,0);if(f<0)return -1;unsigned left=bytes;struct sha256 h;unsigned char b[4096],digest[32];sha_init(&h);int good=1;for(unsigned i=0;left&&i<2048;i++){unsigned ask=left>4096?4096:left;long n=syscall(3,f,b,ask);if(n<=0){good=0;break;}left-=n;sha_add(&h,b,n);}if(left||syscall(3,f,b,1)!=0)good=0;sha_end(&h,digest);if(syscall(6,f))good=0;return good&&eq(digest,expected,32)?0:-1;}
+static int hash_db_elf(const char*path,unsigned char out_sha[32]){
+ static const unsigned char elf_arm32[7]={0x7f,'E','L','F',1,1,1};
+ int f=syscall(5,path,0x80000,0);if(f<0)return -1;
+ struct sha256 h;unsigned char b[4096],hdr[52]={0};sha_init(&h);unsigned total=0;int good=1;
+ while(total<=1048576u){
+  long n=syscall(3,f,b,sizeof b);if(n<0){good=0;break;}if(!n)break;
+  for(unsigned i=0;i<(unsigned)n&&total+i<52u;i++)hdr[total+i]=b[i];
+  sha_add(&h,b,(unsigned)n);total+=(unsigned)n;
+ }
+ sha_end(&h,out_sha);if(syscall(6,f))good=0;
+ unsigned e_type=hdr[16]|((unsigned)hdr[17]<<8),e_machine=hdr[18]|((unsigned)hdr[19]<<8);
+ return (good&&total>=52u&&total<=1048576u&&eq(hdr,elf_arm32,7)&&e_type==3u&&e_machine==40u)?0:-1;
+}
 static int read_words(void*x,uint32_t a,uint32_t*out,uint32_t n){(void)x;return np_read(&platform,a,out,n*4);}
 static int single_ioctl(void*x,int fd,uint32_t op,void*arg){(void)x;if(np_check(&platform)||fd!=platform.s.duplicate_fd)return -4095;return ioctl_fn(fd,op,arg);}
 static int errno_value(void*x){(void)x;return *errno_fn();}
@@ -86,10 +99,10 @@ static int qualify(void){
  if(np_open(&platform))return failure(1);if(pid!=platform.s.pid)return failure(1);worker_tid=platform.s.worker_tid;
  if(worker_tid==pid||np_check(&platform))return failure(2);
  ioctl_fn=dlvsym(platform.refs[1],"ioctl","GLIBC_2.4");errno_fn=dlvsym(platform.refs[1],"__errno_location","GLIBC_2.4");if(!ioctl_fn||!errno_fn)return failure(3);
- if(hash_file("/usr/lib/libIMDB.so",DB_BYTES,db_hash))return failure(4);
- db_pin=dlopen("/usr/lib/libIMDB.so",6);if(!db_pin)return failure(5);find_fn=dlsym(db_pin,"IMDB_find_entry");struct info d={0};unsigned char b[128];
- if(!find_fn||!dladdr(find_fn,&d)||(!same(d.path,"/usr/lib/libIMDB.so")&&!same(d.path,"//usr/lib/libIMDB.so"))||(uint32_t)find_fn-(uint32_t)d.base!=DB_FIND_OFFSET||np_read(&platform,(uint32_t)find_fn&~1u,b,16)||!eq(b,db_find_anchor,16))return failure(6);
- descriptor=find_fn(0xfffe,1);if(descriptor!=(uint32_t)d.base+DB_DESCRIPTOR||np_read(&platform,0xbd18,b,sizeof ref_anchor)||!eq(b,ref_anchor,sizeof ref_anchor))return failure(7);
+ if(hash_db_elf("/usr/lib/libIMDB.so",runtime_db_hash))return failure(4);
+ db_pin=dlopen("/usr/lib/libIMDB.so",6);if(!db_pin)return failure(5);find_fn=dlsym(db_pin,"IMDB_find_entry");struct info d={0},dd={0};unsigned char b[128];
+ if(!find_fn||!dladdr(find_fn,&d)||!d.base||(!same(d.path,"/usr/lib/libIMDB.so")&&!same(d.path,"//usr/lib/libIMDB.so"))||np_read(&platform,(uint32_t)find_fn&~1u,b,16))return failure(6);
+ descriptor=find_fn(0xfffe,1);if(!descriptor||!dladdr((const void*)(uintptr_t)descriptor,&dd)||dd.base!=d.base||np_read(&platform,0xbd18,b,sizeof ref_anchor)||!eq(b,ref_anchor,sizeof ref_anchor))return failure(7);
  uint32_t words[11];if(read_words(0,descriptor,words,11)||words[0]!=0x20000003||words[1]!=4||words[2]!=1||words[3]!=0xfffe)return failure(8);
  for(unsigned i=0;i<7;i++){unsigned n=0;while(db_strings[i][n])n++;n++;if(n>sizeof b||np_read(&platform,words[i+4],b,n)||!eq(b,db_strings[i],n))return failure(9);}
  struct rl_config r={.port={0,tid,read_words,try_sem,signal_sem,find_entry,add_reference},.pid=pid,.worker_tid=worker_tid,.descriptor=descriptor,.handle=(uint32_t)self_pin,.target_mask=1};copy(r.descriptor_words,words,sizeof words);
@@ -145,7 +158,7 @@ static void publish_cache(void){uint32_t out[2048]={0};out[0]=1;out[1]=sizeof ou
  copy(out+1952,&touch_loader_report,sizeof touch_loader_report);
  (void)owner_report_cache_publish(&report_cache,out,sizeof out);
 }
-static int write_ready(void){return ar_write_ready(READY_DIR,installation,db_hash,OWNER_BUILD,pid,&ready_status);}
+static int write_ready(void){return ar_write_ready(READY_DIR,installation,runtime_db_hash,OWNER_BUILD,pid,&ready_status);}
 static void *worker(void*x){(void)x;st(&worker_started,1);nap_progress(2);if(qualify())goto done;nap_progress(20);
  for(unsigned i=0;i<1000&&!ld(&stop);i++){int r=rl_acquire(&lease);if(r==RL_OK||r==RL_ALREADY)break;if(r!=RL_BUSY){failure(11);goto done;}pause20();}
  if(!lease.status.owns_reference){failure(12);goto done;}
@@ -175,12 +188,12 @@ static void *worker(void*x){(void)x;st(&worker_started,1);nap_progress(2);if(qua
   touch_loader_step();
   if(!disabled_reported&&bundle.ap.runtime.phase==AP_DISABLED_PINNED&&lifecycle.audio.phase==LP_ACTIVE){
    disabled_reported=1;uint32_t report[2048];if(!owner_report_cache_report(&report_cache,report,sizeof report)){
-    ar_write_report(READY_DIR,installation,db_hash,OWNER_BUILD,pid,report,sizeof report,&report_status);
+    ar_write_report(READY_DIR,installation,runtime_db_hash,OWNER_BUILD,pid,report,sizeof report,&report_status);
    }publish_cache();
   }
   pause20();
  }
-done:if(ld(&error)&&bundle.s.stage==6)failure_probe_rc=fb_observe(&bundle);st(&exited,1);publish_cache();if(ld(&error)){uint32_t report[2048];if(!owner_report_cache_report(&report_cache,report,sizeof report)){ar_write_report(READY_DIR,installation,db_hash,OWNER_BUILD,pid,report,sizeof report,&report_status);}publish_cache();}return 0;}
+done:if(ld(&error)&&bundle.s.stage==6)failure_probe_rc=fb_observe(&bundle);st(&exited,1);publish_cache();if(ld(&error)){uint32_t report[2048];if(!owner_report_cache_report(&report_cache,report,sizeof report)){ar_write_report(READY_DIR,installation,runtime_db_hash,OWNER_BUILD,pid,report,sizeof report,&report_status);}publish_cache();}return 0;}
 EXPORT int A7R_Lifecycle_Init(void){if(__atomic_exchange_n(&claimed,1,__ATOMIC_ACQ_REL))return -1;pid=syscall(20);bg_event(&bootstrap,LO_INIT,tid(0));entry_evidence(1);
  for(unsigned i=0;i<2;i++){void*fn=i?(void*)pthread_join:(void*)pthread_create;const char*name=i?"pthread_join":"pthread_create";const struct pthread_symbol*s=0;for(unsigned j=0;j<2;j++)if(same(ps[j].name,name))s=ps+j;struct info d={0};if(!s||!dladdr(fn,&d)||(!same(d.path,"/lib/libpthread.so.0")&&!same(d.path,"/lib/libpthread-2.11.2.so")&&!same(d.path,"//lib/libpthread.so.0"))||(uint32_t)fn-(uint32_t)d.base!=s->offset||!eq((void*)((uint32_t)fn&~1u),s->anchor,16))return failure(20);}
  self_pin=dlopen("/usr/lib/liba7r_startup_full_v14.so",6);if(!self_pin||dlsym(self_pin,"A7R_Lifecycle_Init")!=(void*)A7R_Lifecycle_Init)return failure(21);if(pthread_create(&thread,0,worker,0))return failure(22);st(&created,1);return 0;
@@ -189,6 +202,22 @@ static int native_event(uint32_t event){if((unsigned)syscall(20)!=pid)return -1;
 #define ENTRY(name,event) EXPORT int A7R_Lifecycle_##name(void){return native_event(event);}
 ENTRY(Exit,LO_EXIT) ENTRY(Sus,LO_SUS) ENTRY(Res,LO_RES) ENTRY(Inact,LO_INACT) ENTRY(Act,LO_ACT)
 EXPORT int A7R_Lifecycle_Report(uint32_t*out,unsigned bytes){return owner_report_cache_report(&report_cache,out,bytes);}
+EXPORT int A7R_Lifecycle_LiveState(uint32_t*out){
+ if(!out)return -1;
+ out[0]=ld(&bootstrap.ingress.owner.request);
+ out[1]=ld(&bootstrap.ingress.error);
+ out[2]=ld(&bootstrap.ingress.prepared);
+ out[3]=ld(&bootstrap.ingress.owner.error);
+ out[4]=ld(&bootstrap.error);
+ out[5]=ld(&bootstrap.ready);
+ out[6]=ld(&phase);
+ out[7]=ld(&stop);
+ out[8]=ld(&error);
+ out[9]=ld(&final_requested);
+ out[10]=ld(&bootstrap.ingress.owner.bootstrap_state);
+ out[11]=ld(&bootstrap.ingress.owner.act_claim);
+ return 0;
+}
 /* Only process finalization on the original serialized IM main thread may
  * request a graceful exit. Foreign exported Exit remains terminal. The worker
  * keeps original providers alive while it obtains a fresh EXIT drain proof,

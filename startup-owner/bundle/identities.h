@@ -1,8 +1,11 @@
+/* Custom bundle DSOs (bytes == 0) are verified via ARM32 ET_DYN ELF header,
+ * dladdr() module ownership, api_memory() function-table ownership, and ABI
+ * BUILD tags; stock Sony libObj.so retains exact FW 3.10 SHA-256 verification. */
 static const struct spec specs[]={
-{"/usr/lib/liba7r_sd_refresh_runtime_v2.so","a7r_sd_refresh_runtime_v2",11416,67420,{183,208,50,73,22,14,243,20,5,62,182,248,149,32,49,92,150,148,169,63,194,161,22,83,244,201,7,115,171,215,244,182},{4,0,159,229,0,0,143,224,30,255,47,225,216,27,1,0}},
-{"/usr/lib/liba7r_sd_refresh_review.so","",8048,0,{28,46,159,232,17,160,46,106,50,119,63,80,126,7,184,182,172,175,34,103,152,185,21,143,198,171,123,115,201,219,87,253},{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}},
-{"/usr/lib/liba7r_exposure_observer_v2.so","a7r_exposure_observer_v2",6584,67788,{115,187,103,90,181,118,131,194,252,45,145,240,59,140,120,255,252,141,186,19,192,85,22,21,48,138,150,47,50,217,142,136},{4,0,159,229,0,0,143,224,30,255,47,225,40,11,1,0}},
-{"/usr/lib/liba7r_capture_fresh_v12.so","a7r_capture_fresh_v12",93468,124824,{243,34,211,233,245,9,229,37,178,7,43,238,199,188,194,20,97,176,244,253,54,179,89,151,186,30,22,130,48,57,137,73},{4,0,159,229,0,0,143,224,30,255,47,225,132,118,1,0}},
-{"/usr/lib/liba7r_menu_product_v21.so","a7r_menu_bootstrap_v21",70160,76024,{198,117,41,202,60,194,177,93,193,118,175,88,151,90,12,142,200,65,198,138,132,99,89,165,86,12,14,183,244,162,90,172},{4,0,159,229,0,0,143,224,30,255,47,225,240,224,1,0}},
+{"/usr/lib/liba7r_sd_refresh_runtime_v2.so","a7r_sd_refresh_runtime_v2",0,0,{0},{0}},
+{"/usr/lib/liba7r_sd_refresh_review.so","",0,0,{0},{0}},
+{"/usr/lib/liba7r_exposure_observer_v2.so","a7r_exposure_observer_v2",0,0,{0},{0}},
+{"/usr/lib/liba7r_capture_fresh_v12.so","a7r_capture_fresh_v12",0,0,{0},{0}},
+{"/usr/lib/liba7r_menu_product_v21.so","a7r_menu_bootstrap_v21",0,0,{0},{0}},
 {"/usr/lib/libObj.so","timerManager",19483804,19745484,{148,206,110,196,124,43,57,74,161,164,247,129,191,179,233,236,51,55,246,162,184,85,143,160,37,244,46,135,178,221,161,155},{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}},
 };

@@ -147,13 +147,17 @@ A7R3_FW_ROOT=/path/to/verified-3.10/filesystems make verify-fw
 
 该命令将校验原厂关键组件 SHA-256，对真实 `libIMDB.so` 在临时目录执行纯数据扩展并核对确定性摘要（`61,840 B`），并在检测到 `zig` 编译器时自动完成全套 ARMv7 静态守护进程、常驻 Owner、退出桥与原子发布器的交叉编译及无 `RWX` / `DT_RELCOUNT == 0` 审计。
 
-### 3. 单独调用 `libIMDB.so` 纯数据扩展器
+### 3. 单独调用 `libIMDB.so` 纯数据扩展器与发布身份同步工具
 
 ```bash
 python3 imdb-registry/build_imdb.py \
   --stock-imdb /path/to/verified-3.10/filesystems/nflasha15/export/lib/libIMDB.so \
   --output /tmp/libIMDB.candidate.so \
   --report /tmp/imdb-report.json
+
+# 自编译构建全套模块后，一键同步守护进程、协调器与发布器的安装随机数及摘要头文件
+python3 publishers/configure_release.py \
+  --artifacts-dir /path/to/your-built-artifacts
 ```
 
 ### 4. 清理构建产物

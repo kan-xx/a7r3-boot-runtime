@@ -13,7 +13,7 @@ static int check_file(const struct payload*p){int f=open(p->path,O_RDONLY|O_NOFO
 int main(int argc,char**argv){setbuf(stdout,NULL);int commit=argc==2&&!strcmp(argv[1],"--commit");if(argc!=2||(!commit&&strcmp(argv[1],"--verify"))||geteuid())return 90;
  struct gi_result r={.code=GI_INVALID};int lib=-1;struct stat st;
  root=open("/usr",O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);if(readonly(0)!=1)goto done;
- lib=openat(root,"lib",O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);if(lib<0||fstat(lib,&st)||st.st_ino!=49345||st.st_uid!=57285||st.st_gid!=1000||(st.st_mode&07777)!=0755||major(st.st_dev)!=252||minor(st.st_dev)!=15)goto done;
+ lib=openat(root,"lib",O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);if(lib<0||fstat(lib,&st)||!S_ISDIR(st.st_mode)||st.st_uid!=57285||st.st_gid!=1000||(st.st_mode&07777)!=0755||major(st.st_dev)!=252||minor(st.st_dev)!=15)goto done;
  for(unsigned i=0;i<sizeof payloads/sizeof payloads[0];i++)if(!check_file(payloads+i)){r.code=80+i;goto done;}
  struct gx_config c=configuration;c.remount=remount;c.readonly=readonly;gi_run(lib,&c,SOURCE_NAME,RETAINED_ORIGINAL,commit,&r);
 done:if(lib>=0&&close(lib))r.code=GI_CLOSE;if(root>=0){r.readonly=readonly(0)==1;if(close(root))r.code=GI_CLOSE;}

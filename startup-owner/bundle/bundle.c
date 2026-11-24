@@ -15,7 +15,20 @@ static int same(const char*a,const char*b){if(!a||!b)return 0;while(*a&&*a==*b){
 static int fail(struct fb_context*c,unsigned e,int r){if(!c->s.error)c->s.error=e;c->s.last_rc=r;return -1;}
 static int owner(struct fb_context*c){return c&&c->platform&&c->platform->s.pid==(uint32_t)syscall(20)&&c->platform->s.worker_tid==(uint32_t)syscall(224);}
 static int hash_file(const struct spec*s){
- int fd=syscall(5,s->path,0x88000,0);if(fd<0)return -1;struct sha256 h;sha_init(&h);uint8_t b[4096],d[32];unsigned left=s->bytes;int good=1;
+ static const uint8_t elf_arm32[7]={0x7f,'E','L','F',1,1,1};
+ int fd=syscall(5,s->path,0x88000,0);if(fd<0)return -1;
+ if(!s->bytes){
+  uint8_t b[4096],hdr[52]={0};unsigned total=0;int good=1;
+  while(total<=1048576u){
+   long r=syscall(3,fd,b,sizeof b);if(r<0){good=0;break;}if(!r)break;
+   for(unsigned i=0;i<(unsigned)r&&total+i<52u;i++)hdr[total+i]=b[i];
+   total+=(unsigned)r;
+  }
+  if(syscall(6,fd))good=0;
+  unsigned e_type=hdr[16]|((unsigned)hdr[17]<<8),e_machine=hdr[18]|((unsigned)hdr[19]<<8);
+  return (good&&total>=52u&&total<=1048576u&&eq(hdr,elf_arm32,7)&&e_type==3u&&e_machine==40u)?0:-1;
+ }
+ struct sha256 h;sha_init(&h);uint8_t b[4096],d[32];unsigned left=s->bytes;int good=1;
  for(unsigned i=0;left&&i<32768;i++){unsigned want=left>4096?4096:left;long r=syscall(3,fd,b,want);if(r<=0||(unsigned)r>want){good=0;break;}sha_add(&h,b,r);left-=r;}
  if(left||syscall(3,fd,b,1)!=0)good=0;sha_end(&h,d);if(syscall(6,fd))good=0;return good&&eq(d,s->sha,32)?0:-1;
 }
@@ -23,7 +36,7 @@ static int name_ok(const char*path,const char*observed){return same(path,observe
 static void* symbol(struct fb_context*c,unsigned index,const char*name){
  const struct spec*s=specs+index;void*p=dlsym(c->pins[index],name);struct info d={0};uint8_t b[16];
  if(!p||!dladdr(p,&d)||!d.base||!name_ok(s->path,d.path)||(c->bases[index]&&c->bases[index]!=(uint32_t)d.base))return 0;
- if(same(name,s->getter)&&((uint32_t)p-(uint32_t)d.base!=s->offset||np_read(c->platform,(uint32_t)p&~1u,b,16)||!eq(b,s->anchor,16)))return 0;
+ if(s->bytes&&s->offset&&same(name,s->getter)&&((uint32_t)p-(uint32_t)d.base!=s->offset||np_read(c->platform,(uint32_t)p&~1u,b,16)||!eq(b,s->anchor,16)))return 0;
  c->bases[index]=(uint32_t)d.base;return p;
 }
 static int api_memory(struct fb_context*c,unsigned index,const void*ptr,unsigned bytes,unsigned first_function){

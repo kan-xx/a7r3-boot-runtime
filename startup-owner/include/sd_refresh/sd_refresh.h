@@ -3,13 +3,9 @@
 #include <stdint.h>
 #include <stddef.h>
 #define SR_ABI 1u
-#define SR_BYTES 22592u
+#define SR_SLOT_CAP 25600u
+#define SR_BYTES (2u * SR_SLOT_CAP)
 #define SR_CHUNK 4096u
-/* Native functions are borrowed. The host pins their providers and this module
- * from initialize until stop returns OK; no Fsys init/mount/global cancellation.
- * worker_tick runs on a host-owned BACKGROUND executor, never UI/event callback.
- * All APIs except worker_tick/stop perform bounded work and may return BUSY.
- * cancel uses one atomic RMW and never waits for the worker. */
 struct sr_fsys {
  int32_t (*open)(const char *,uint32_t *,uint32_t);
  int32_t (*read)(uint32_t,void *,int32_t);
@@ -32,27 +28,13 @@ struct sr_status {
 _Static_assert(sizeof(struct sr_asset_result)==68,"asset wire ABI");
 _Static_assert(sizeof(struct sr_status)==252,"status wire ABI");
 struct sr_audit {uint32_t generation,source_control,observed_control,valid;uint8_t nonce[16];};
-/* Initialize only zeroed, aligned, exclusively owned storage. Output/input
- * arguments must not overlap that storage. Reinitialization is rejected. */
 size_t sr_context_bytes(void);
 int sr_initialize(void *,size_t,const struct sr_fsys *);
 int sr_refresh(void *,uint32_t expected_control,const uint8_t nonce[16]);
-/* Invalidates admission immediately. Atomic RMW sets the cancel bit; the
- * worker/refresh owner advances the serial before admitting another request.
- * Return is always OK for an initialized object. It does not mean IO drained. */
 int sr_cancel(void *);
 int sr_select(void *,uint32_t expected_generation,uint32_t desired);
 int sr_query(void *,struct sr_status *);
-/* Tick may block inside Sony calls; repeated/concurrent ticks return BUSY.
- * It processes at most one request. If final publication lock is contended,
- * returns BUSY retaining completion; call again on the same background executor.
- * Never cancel/kill that thread. */
 int sr_worker_tick(void *);
-/* Audit is only a bounded copy of the last verified snapshot. May return valid=0.
- * NOT a playback lease; no API here authorizes new playback after cancellation. */
 int sr_audit_copy(void *,uint32_t expected_generation,uint32_t offset,void *,uint32_t,struct sr_audit *);
-/* First cancels admission. BUSY => drain ticks/calls; HOLD => unknown native
- * Close cannot be waived by this API. Only OK releases the borrowed API lifetime.
- * Caller must prevent new API callers before freeing a retired context. */
 int sr_stop(void *);
 #endif
